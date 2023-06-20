@@ -25,6 +25,7 @@ def split_dataset(dataset, n,batch_size,n_worker):
     return dataloader
 
 def epoch_loss(model,tqdm,device):
+    model.eval()
     with torch.no_grad():
         e_loss = 0.
         n_iter = 0

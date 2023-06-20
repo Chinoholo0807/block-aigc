@@ -84,7 +84,7 @@ def train_cifar10(
                 "iter_loss": f"{loss.item()}"
                 })
             optim.step()
-        epoch_loss = util.epoch_loss(ddpm,pbar,device)
+        epoch_loss = util.epoch_loss(ddpm,tqdm(dataloader),device)
         avg_iter_loss = running_loss / n_iter
         print(f"epoch={e},loss_ema={loss_ema:.4f},avg_iter_loss={avg_iter_loss},epoch_loss={epoch_loss}")
         if e % 4 == 0:

@@ -18,15 +18,13 @@ import copy
 class Client:
     def __init__(
         self, 
-        device: str,
-        beta_1:float,
-        beta_2:float,
-        n_T:int,
-        lr:float,
-        local_epoch: int = 1,
+        device,
+        model,
+        lr,
+        local_epoch = 1,
     ):
         self.device = device
-        self.model = DDPM(eps_model=NaiveUnet(3, 3, n_feat=128), betas=(beta_1, beta_2), n_T=n_T)
+        self.model = model
         self.model.to(device)
         self.local_epoch = local_epoch
         self.opti = torch.optim.Adam(self.model.parameters(), lr=lr)
@@ -90,13 +88,13 @@ class Client:
 
 def train_fed_cifar10(
     device: str = "cuda:3", 
-    # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = "checkpoint/cifar/ckpt__.pt",
+    ckpt_load_pth: str = '', 
+    # ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt__.pt",
     ckpt_dir_pth: str = "checkpoint/fed_cifar/",
     matrix_dir_pth : str = "matrix/fed_cifar/",
     sample_dir_pth : str = "sample/fed_cifar/",
     log_dir_pth : str = "log/fed_cifar/",
-    n_epoch: int = 20, 
+    n_epoch: int = 100, 
     n_T: int = 1000,
     beta_1: float = 1e-4,
     beta_2: float = 0.02,
@@ -120,7 +118,7 @@ def train_fed_cifar10(
         print(f"start_epoch is {start_epoch}")
     ddpm.to(device)
 
-    clients = [Client(device,beta_1,beta_2,n_T,lr) for _ in range(n_client)]
+    clients = [Client(device,copy.deepcopy(ddpm),lr) for _ in range(n_client)]
     
     tf = transforms.Compose(
         [
@@ -170,7 +168,7 @@ def train_fed_cifar10(
 def eval_cifar10(
     device: str = "cuda:2", 
     # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = "",
+    ckpt_load_pth: str = "checkpoint/cifar/ckpt_19_.pt",
     ckpt_dir_pth: str = "checkpoint/fed_cifar/",
     matrix_dir_pth : str = "matrix/fed_cifar/",
     sample_dir_pth : str = "sample/fed_cifar/",
