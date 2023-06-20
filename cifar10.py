@@ -10,11 +10,7 @@ from torchvision.utils import save_image, make_grid
 from model.unet import NaiveUnet
 from model.ddpm import DDPM
 import util
-# from util import ck_dir_exist
-# from util import get_epoch_from_path
 import os
-
-
 
 def train_cifar10(
     device: str = "cuda:2", 
@@ -24,7 +20,7 @@ def train_cifar10(
     matrix_dir_pth : str = "matrix/cifar/",
     sample_dir_pth : str = "sample/cifar/",
     log_dir_pth : str = "log/cifar/",
-    n_epoch: int = 20, 
+    n_epoch: int = 100, 
     n_T: int = 1000,
     beta_1: float = 1e-4,
     beta_2: float = 0.02,
@@ -69,6 +65,8 @@ def train_cifar10(
 
         pbar = tqdm(dataloader)
         loss_ema = None
+        running_loss = 0.
+        n_iter = 0
         for x, _ in pbar:
             optim.zero_grad()
             x = x.to(device)
@@ -78,27 +76,32 @@ def train_cifar10(
                 loss_ema = loss.item()
             else:
                 loss_ema = 0.9 * loss_ema + 0.1 * loss.item()
+            running_loss = running_loss + loss.item()
+            n_iter = n_iter+1
             pbar.set_description(f"epoch: {e}")
             pbar.set_postfix({
-                "loss": f"{loss_ema:.4f}"
+                "loss": f"{loss_ema:.4f}",
+                "iter_loss": f"{loss.item()}"
                 })
             optim.step()
-        print(f"epoch={e},loss_ema={loss_ema:.4f}")
-        
-        ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_" + str(e) + "_.pt")
-        torch.save(ddpm.state_dict(), ckpt_file)
+        epoch_loss = util.epoch_loss(ddpm,pbar,device)
+        avg_iter_loss = running_loss / n_iter
+        print(f"epoch={e},loss_ema={loss_ema:.4f},avg_iter_loss={avg_iter_loss},epoch_loss={epoch_loss}")
+        if e % 4 == 0:
+            ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_" + str(e) + "_.pt")
+            torch.save(ddpm.state_dict(), ckpt_file)
         with open(matrix_file,'a+') as f:
-            f.write(f'{e},{loss}\n')
+            f.write(f'{e},{loss},{avg_iter_loss},{epoch_loss}\n')
     
 
 def eval_cifar10(
-    device: str = "cuda:1", 
+    device: str = "cuda:2", 
     # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = None,
-    ckpt_dir_pth: str = 'checkpoint/cifar/',
-    matrix_dir_pth : str = 'matrix/cifar/',
-    log_dir_pth : str = 'log/cifar/',
-    sample_dir_pth : str = 'sample/cifar/',
+    ckpt_load_pth: str = "checkpoint/cifar/ckpt_39_.pt",
+    ckpt_dir_pth: str = "checkpoint/cifar/",
+    matrix_dir_pth : str = "matrix/cifar/",
+    sample_dir_pth : str = "sample/cifar/",
+    log_dir_pth : str = "log/cifar/",
     n_epoch: int = 20, 
     n_T: int = 1000,
     beta_1: float = 1e-4,
