@@ -33,6 +33,8 @@ class Client:
         self.model.train()
         loss_ema_list = []
         avg_iter_loss_list = []
+        test_key = 'eps_model.up2.model.1.conv.3.weight'
+        print('before train:',self.model.state_dict()[test_key].view(-1)[:8])
         pbar = tqdm(dataloader)
         for iter in range(self.local_epoch):
             loss_ema = None
@@ -56,6 +58,7 @@ class Client:
                 self.opti.step()
             loss_ema_list.append(loss_ema)
             avg_iter_loss_list.append(iter_loss_sum / n_iter)
+        print('after train:',self.model.state_dict()[test_key].view(-1)[:8])
         return sum(loss_ema_list)/len(loss_ema_list),sum(avg_iter_loss_list)/len(avg_iter_loss_list)
     
     def eval_loss(self,datalaoder:DataLoader):
@@ -88,8 +91,8 @@ class Client:
 
 def train_fed_cifar10(
     device: str = "cuda:3", 
-    ckpt_load_pth: str = '', 
-    # ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt__.pt",
+    # ckpt_load_pth: str = '', 
+    ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt_99_.pt",
     ckpt_dir_pth: str = "checkpoint/fed_cifar/",
     matrix_dir_pth : str = "matrix/fed_cifar/",
     sample_dir_pth : str = "sample/fed_cifar/",
@@ -117,7 +120,7 @@ def train_fed_cifar10(
         start_epoch = util.get_epoch_from_path(ckpt_load_pth)+1
         print(f"start_epoch is {start_epoch}")
     ddpm.to(device)
-
+    glb_model = ddpm
     clients = [Client(device,copy.deepcopy(ddpm),lr) for _ in range(n_client)]
     
     tf = transforms.Compose(
@@ -134,7 +137,7 @@ def train_fed_cifar10(
     dataloaders = util.split_dataset(dataset,n_client,batch_size,num_workers)
     glb_dataloader = DataLoader(dataset, batch_size=batch_size,shuffle=True, num_workers=num_workers)
     optim = torch.optim.Adam(ddpm.parameters(), lr=lr)
-    glb_model = clients[0].model
+ 
     matrix_file = os.path.join(matrix_dir_pth,'fed_cifar10.txt')
     for e in range(n_epoch):
         e = e + start_epoch
@@ -148,27 +151,29 @@ def train_fed_cifar10(
             loss_ema_arr.append(loss_ema)
             loss_iter_arr.append(loss_iter)
         # aggreaget the global model
-        glb_model = clients[0].model
+        glb_model = copy.deepcopy(clients[0].model)
         for cli in clients[1:]:
             for glb_param,loc_param in zip(glb_model.parameters(),cli.model.parameters()):
                 glb_param.data +=loc_param.data
         for glb_param in glb_model.parameters():
             glb_param.data /= n_client
             
-        ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_" + str(e) + "_.pt")
+        
         avg_loss_ema = sum(loss_ema_arr)/len(loss_ema_arr)
         avg_loss_iter = sum(loss_iter_arr)/len(loss_iter_arr)
-        torch.save(glb_model.state_dict(), ckpt_file)
+        if e%5 == 0:
+            ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_" + str(e) + "_.pt")
+            torch.save(glb_model.state_dict(), ckpt_file)
         epoch_loss = util.epoch_loss(glb_model,tqdm(glb_dataloader),device)
         print(f'epoch={e},avg_loss_ema={avg_loss_ema},avg_loss_iter={avg_loss_iter},epoch_loss={epoch_loss}')
         with open(matrix_file,'a+') as f:
             f.write(f'{e},{avg_loss_ema},{avg_loss_iter},{epoch_loss}\n')
     
 
-def eval_cifar10(
+def eval_fed_cifar10(
     device: str = "cuda:2", 
     # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = "checkpoint/cifar/ckpt_19_.pt",
+    ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt_196_.pt",
     ckpt_dir_pth: str = "checkpoint/fed_cifar/",
     matrix_dir_pth : str = "matrix/fed_cifar/",
     sample_dir_pth : str = "sample/fed_cifar/",
@@ -201,5 +206,5 @@ def eval_cifar10(
         save_image(grid, sample_file)
     
 if __name__ == "__main__":
-    train_fed_cifar10()
-    # eval_cifar10()
+    # train_fed_cifar10()
+    eval_fed_cifar10()

@@ -13,6 +13,7 @@ class DDPM(nn.Module):
         betas: Tuple[float, float],
         n_T: int,
         criterion: nn.Module = nn.MSELoss(),
+        regular = True,
     ) -> None:
         super(DDPM, self).__init__()
         self.eps_model = eps_model
@@ -23,7 +24,7 @@ class DDPM(nn.Module):
 
         self.n_T = n_T
         self.criterion = criterion
-
+        self.regular = regular
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Makes forward diffusion x_t, and tries to guess epsilon value from x_t using eps_model.
@@ -39,8 +40,10 @@ class DDPM(nn.Module):
             + self.sqrtmab[_ts, None, None, None] * eps
         )  # This is the x_t, which is sqrt(alphabar) x_0 + sqrt(1-alphabar) * eps
         # We should predict the "error term" from this x_t. Loss is what we return.
-
-        return self.criterion(eps, self.eps_model(x_t, _ts / self.n_T))
+        if self.regular == True:
+            return self.criterion(eps, self.eps_model(x_t, _ts / self.n_T))
+        else:
+            return self.criterion(eps,self.eps_model(x_t,_ts))
 
     def sample(self, n_sample: int, size, device) -> torch.Tensor:
 

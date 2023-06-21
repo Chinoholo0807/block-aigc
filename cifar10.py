@@ -13,14 +13,14 @@ import util
 import os
 
 def train_cifar10(
-    device: str = "cuda:2", 
-    # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = "",
+    device: str = "cuda:3", 
+    ckpt_load_pth: str = 'checkpoint/cifar/ckpt_148_.pt', 
+    # ckpt_load_pth: str = "",
     ckpt_dir_pth: str = "checkpoint/cifar/",
     matrix_dir_pth : str = "matrix/cifar/",
     sample_dir_pth : str = "sample/cifar/",
     log_dir_pth : str = "log/cifar/",
-    n_epoch: int = 100, 
+    n_epoch: int = 104, 
     n_T: int = 1000,
     beta_1: float = 1e-4,
     beta_2: float = 0.02,
@@ -87,7 +87,7 @@ def train_cifar10(
         epoch_loss = util.epoch_loss(ddpm,tqdm(dataloader),device)
         avg_iter_loss = running_loss / n_iter
         print(f"epoch={e},loss_ema={loss_ema:.4f},avg_iter_loss={avg_iter_loss},epoch_loss={epoch_loss}")
-        if e % 4 == 0:
+        if e % 5 == 0:
             ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_" + str(e) + "_.pt")
             torch.save(ddpm.state_dict(), ckpt_file)
         with open(matrix_file,'a+') as f:
@@ -97,7 +97,7 @@ def train_cifar10(
 def eval_cifar10(
     device: str = "cuda:2", 
     # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = "checkpoint/cifar/ckpt_39_.pt",
+    ckpt_load_pth: str = "checkpoint/cifar/ckpt_200_.pt",
     ckpt_dir_pth: str = "checkpoint/cifar/",
     matrix_dir_pth : str = "matrix/cifar/",
     sample_dir_pth : str = "sample/cifar/",
@@ -130,5 +130,5 @@ def eval_cifar10(
         save_image(grid, sample_file)
     
 if __name__ == "__main__":
-    train_cifar10()
-    # eval_cifar10()
+    # train_cifar10()
+    eval_cifar10()
