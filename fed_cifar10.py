@@ -9,6 +9,7 @@ from torchvision.utils import save_image, make_grid
 
 from model.unet import NaiveUnet
 from model.ddpm import DDPM
+from model.unet_complex import UNet
 import util
 # from util import ck_dir_exist
 # from util import get_epoch_from_path
@@ -33,8 +34,8 @@ class Client:
         self.model.train()
         loss_ema_list = []
         avg_iter_loss_list = []
-        test_key = 'eps_model.up2.model.1.conv.3.weight'
-        print('before train:',self.model.state_dict()[test_key].view(-1)[:8])
+        # test_key = 'eps_model.up2.model.1.conv.3.weight'
+        # print('before train:',self.model.state_dict()[test_key].view(-1)[:8])
         pbar = tqdm(dataloader)
         for iter in range(self.local_epoch):
             loss_ema = None
@@ -58,7 +59,7 @@ class Client:
                 self.opti.step()
             loss_ema_list.append(loss_ema)
             avg_iter_loss_list.append(iter_loss_sum / n_iter)
-        print('after train:',self.model.state_dict()[test_key].view(-1)[:8])
+        # print('after train:',self.model.state_dict()[test_key].view(-1)[:8])
         return sum(loss_ema_list)/len(loss_ema_list),sum(avg_iter_loss_list)/len(avg_iter_loss_list)
     
     def eval_loss(self,datalaoder:DataLoader):
@@ -91,13 +92,14 @@ class Client:
 
 def train_fed_cifar10(
     device: str = "cuda:3", 
-    # ckpt_load_pth: str = '', 
-    ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt_99_.pt",
+    ckpt_load_pth: str = '', 
+    # ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt_99_.pt",
     ckpt_dir_pth: str = "checkpoint/fed_cifar/",
+    ckpt_save_freq :int = 10,
     matrix_dir_pth : str = "matrix/fed_cifar/",
     sample_dir_pth : str = "sample/fed_cifar/",
     log_dir_pth : str = "log/fed_cifar/",
-    n_epoch: int = 100, 
+    n_epoch: int = 200, 
     n_T: int = 1000,
     beta_1: float = 1e-4,
     beta_2: float = 0.02,
@@ -111,8 +113,10 @@ def train_fed_cifar10(
     util.ck_dir_exist(matrix_dir_pth)
     util.ck_dir_exist(ckpt_dir_pth)
     util.ck_dir_exist(log_dir_pth)
-    ddpm = DDPM(eps_model=NaiveUnet(3, 3, n_feat=128),
-                betas=(beta_1, beta_2), n_T=n_T)
+    # ddpm = DDPM(eps_model=NaiveUnet(3, 3, n_feat=128),
+    #             betas=(beta_1, beta_2), n_T=n_T)
+    ddpm = DDPM(eps_model=UNet(n_T),
+            betas=(beta_1, beta_2), n_T=n_T,regular=False)
     start_epoch = 0
     if os.path.isfile(ckpt_load_pth):
         print(f"load model from {ckpt_load_pth}")
@@ -136,9 +140,8 @@ def train_fed_cifar10(
     )
     dataloaders = util.split_dataset(dataset,n_client,batch_size,num_workers)
     glb_dataloader = DataLoader(dataset, batch_size=batch_size,shuffle=True, num_workers=num_workers)
-    optim = torch.optim.Adam(ddpm.parameters(), lr=lr)
  
-    matrix_file = os.path.join(matrix_dir_pth,'fed_cifar10.txt')
+    matrix_file = os.path.join(matrix_dir_pth,'fed_cplx_cifar10.txt')
     for e in range(n_epoch):
         e = e + start_epoch
         ddpm.train()
@@ -161,8 +164,8 @@ def train_fed_cifar10(
         
         avg_loss_ema = sum(loss_ema_arr)/len(loss_ema_arr)
         avg_loss_iter = sum(loss_iter_arr)/len(loss_iter_arr)
-        if e%5 == 0:
-            ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_" + str(e) + "_.pt")
+        if e % ckpt_save_freq == 0:
+            ckpt_file = os.path.join(ckpt_dir_pth,"ckpt_cplx_" + str(e) + "_.pt")
             torch.save(glb_model.state_dict(), ckpt_file)
         epoch_loss = util.epoch_loss(glb_model,tqdm(glb_dataloader),device)
         print(f'epoch={e},avg_loss_ema={avg_loss_ema},avg_loss_iter={avg_loss_iter},epoch_loss={epoch_loss}')
@@ -173,7 +176,7 @@ def train_fed_cifar10(
 def eval_fed_cifar10(
     device: str = "cuda:2", 
     # ckpt_load_pth: str = 'checkpoint/cifar/ckpt_18_.pt', 
-    ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt_196_.pt",
+    ckpt_load_pth: str = "checkpoint/fed_cifar/ckpt_cplx_190_.pt",
     ckpt_dir_pth: str = "checkpoint/fed_cifar/",
     matrix_dir_pth : str = "matrix/fed_cifar/",
     sample_dir_pth : str = "sample/fed_cifar/",
@@ -185,11 +188,13 @@ def eval_fed_cifar10(
     batch_size: int = 256,
     num_workers: int = 16,
     lr: float = 1e-5,
-    n_sample = 8
+    n_sample = 16
 ):
     util.ck_dir_exist(sample_dir_pth)
-    ddpm = DDPM(eps_model=NaiveUnet(3, 3, n_feat=128),
-                betas=(beta_1, beta_2), n_T=n_T)
+    # ddpm = DDPM(eps_model=NaiveUnet(3, 3, n_feat=128),
+    #             betas=(beta_1, beta_2), n_T=n_T)
+    ddpm = DDPM(eps_model=UNet(n_T),
+        betas=(beta_1, beta_2), n_T=n_T,regular=False)
     if os.path.isfile(ckpt_load_pth):
         print(f"load model from {ckpt_load_pth}\n")
         ddpm.load_state_dict(torch.load(ckpt_load_pth,map_location=device))
@@ -202,7 +207,7 @@ def eval_fed_cifar10(
     with torch.no_grad():
         xset = ddpm.sample(n_sample, (3, 32, 32), device)
         grid = make_grid(xset, normalize=True, value_range=(-1, 1), nrow=4)
-        sample_file = os.path.join(sample_dir_pth,f"ddpm_sample_fed_cifar_{epoch}.png")
+        sample_file = os.path.join(sample_dir_pth,f"ddpm_sample_fed_cifar_cplx{epoch}.png")
         save_image(grid, sample_file)
     
 if __name__ == "__main__":

@@ -34,26 +34,34 @@ class DDPM(nn.Module):
         _ts = torch.randint(1, self.n_T + 1, (x.shape[0],)).to(x.device)
         # t ~ Uniform(0, n_T)
         eps = torch.randn_like(x)  # eps ~ N(0, 1)
-
+        
         x_t = (
             self.sqrtab[_ts, None, None, None] * x
             + self.sqrtmab[_ts, None, None, None] * eps
         )  # This is the x_t, which is sqrt(alphabar) x_0 + sqrt(1-alphabar) * eps
         # We should predict the "error term" from this x_t. Loss is what we return.
+        # print('x_t.shape=',x_t.shape)
+        # print('_ts.shape=',_ts.shape)
         if self.regular == True:
             return self.criterion(eps, self.eps_model(x_t, _ts / self.n_T))
         else:
-            return self.criterion(eps,self.eps_model(x_t,_ts))
+            return self.criterion(eps,self.eps_model(x_t,_ts-1))
 
     def sample(self, n_sample: int, size, device) -> torch.Tensor:
 
         x_i = torch.randn(n_sample, *size).to(device)  # x_T ~ N(0, 1)
-
+        # print('x_i.shape=',x_i.shape)
         # This samples accordingly to Algorithm 2. It is exactly the same logic.
         for i in range(self.n_T, 0, -1): # t = T,...,1
             z = torch.randn(n_sample, *size).to(device) if i > 1 else 0
+            if self.regular == True:
+                _ts = torch.tensor(i / self.n_T).to(device).repeat(n_sample, 1)
+            else:
+                _ts = torch.full((n_sample,), i-1, dtype=torch.int64, device=device)
+            # if i == self.n_T:
+            #     print('_ts.shape',_ts.shape)
             eps = self.eps_model(
-                x_i, torch.tensor(i / self.n_T).to(device).repeat(n_sample, 1)
+                x_i, _ts
             )
             x_i = (
                 self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
