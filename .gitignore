@@ -165,3 +165,5 @@ data/
 log/
 matrix/
 extra/
+nohup/
+.history/

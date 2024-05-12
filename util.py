@@ -2,8 +2,10 @@ import os
 import re
 from torch.utils.data import random_split, DataLoader, TensorDataset
 import torch
+import numpy as np
 from collections import defaultdict
-
+import random
+random.seed(24)
 def ck_dir_exist(pth):
     if pth is None:
         return 
@@ -44,7 +46,7 @@ def epoch_loss(model,tqdm,device):
 
 
 def sample_data(label_dict, label, num_samples):
-    import random
+
     # 从指定标签中随机抽取指定数量的样本
     data = random.sample(label_dict[label], num_samples)
     # 返回 (num_sample, dim_1, .. , dim_n)的张量
@@ -63,11 +65,13 @@ def calculate_emd(labels1, labels2, labels_cnt=10):
     for label in labels1:
         cnt1[label] += 1
     cnt1 = cnt1 / len(labels1)
+    print("lalel1 freq:",cnt1)
     # 计算labels2的频率向量
     cnt2 = torch.zeros(labels_cnt)
     for label in labels2:
         cnt2[label] += 1
     cnt2 = cnt2 / len(labels2)
+    print("lalel2 freq:",cnt2)
     # print(f"cnt1 = {cnt1}", f"cnt2 = {cnt2}")
     # 计算EMD
     emd = (cnt1-cnt2).abs().sum()
@@ -86,6 +90,8 @@ def split_dataset_with_emd(dataset, total_samples, delta, batch_size, n_worker, 
     labels_all = []
     for label in range(label_cnt): 
         sampled_data = sample_data(label_dict, label, num_samples)
+        # 打印第一个元素的值
+        print("label=",label,",sample=",sampled_data[0].sum())
         if label < label_cnt // 2:
             images_a.append(sampled_data[:num_samples//2+int(more)])
             images_b.append(sampled_data[num_samples//2-int(more):])
