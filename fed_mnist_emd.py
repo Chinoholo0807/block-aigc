@@ -86,11 +86,7 @@ class Client:
                 self.opti.step()
             return loss_ema, iter_loss_sum / n_iter
 
-SEED = 24
-np.random.seed(SEED)
-random.seed(SEED)
-torch.manual_seed(SEED)
-
+SEED = 1024
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--device', type=str, default='cuda:3')
@@ -102,7 +98,14 @@ parser.add_argument('--emd_delta', type=float, default=0.1)
 parser.add_argument('--test', type=bool, default=False)
 parser.add_argument('--glb_epoch', type=int, default=20)
 parser.add_argument('--local_epoch', type=int, default=30)
+parser.add_argument('--sample_seed', type=int, default=SEED)
+parser.add_argument('--seed', type=int, default=SEED)
 args = parser.parse_known_args()[0]
+seed = args.seed
+sample_seed = args.sample_seed
+np.random.seed(seed)
+random.seed(seed)
+torch.manual_seed(seed)
 
 device = args.device
 ckpt_load_pth = args.ckpt_load_pth
@@ -116,14 +119,14 @@ emd_src_folder_pth = os.path.join(folder_path,"emd","src")
 emd_dst_folder_pth = os.path.join(folder_path,"emd","dst")
 # training parameters
 glb_epoch = args.glb_epoch
-ckpt_save_freq = 300
+ckpt_save_freq = glb_epoch
 local_epoch = args.local_epoch
 n_T = 500
 beta_1 = 1e-4
 beta_2 = 0.02
 batch_size = 256
 num_workers = 16
-lr = 1e-5
+lr = 5e-4
 
 # fed parameters
 n_sample = args.n_sample
@@ -133,10 +136,13 @@ emd_delta = args.emd_delta
 
 
 parameters = {
+    'seed': seed,
+    'sample_seed': sample_seed,
     'glb_epoch': glb_epoch,
     'ckpt_load_pth': ckpt_load_pth,
     'ckpt_save_freq': ckpt_save_freq,
     'local_epoch': local_epoch,
+    'glb_epoch': glb_epoch,
     'n_T': n_T,
     'beta_1': beta_1,
     'beta_2': beta_2,
@@ -153,7 +159,7 @@ parameters = {
 
 
 
-def init():
+def init_path():
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     if not os.path.exists(emd_src_folder_pth):
@@ -163,7 +169,9 @@ def init():
     json_str = json.dumps(parameters, indent=4)
     with open(os.path.join(folder_path,'parameters.json'), 'w') as json_file:
         json_file.write(json_str)
+        
 def train_fed_mnist():
+    init_path()
     model = UNetModel(
         in_channels=1,
         model_channels=96,
@@ -196,9 +204,10 @@ def train_fed_mnist():
             [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
         ),
     )
-    dataloaders = util.split_dataset_with_emd(dataset,datasize,emd_delta,batch_size,num_workers)
+    # dataloaders = util.split_dataset_with_emd(dataset,datasize,emd_delta,batch_size,num_workers)
+    dataloaders = util.split_dataset_with_delta_ugly(dataset,datasize,emd_delta,batch_size,num_workers)
     glb_dataloader = dataloaders[-1]
-    
+    dataloaders = dataloaders[:-1]
     if args.test is False:
         for e in range(1,glb_epoch+1):
             e = e + start_epoch
@@ -208,6 +217,7 @@ def train_fed_mnist():
                 cli.model.load_state_dict(copy.deepcopy(glb_model.state_dict()))
                 loss = cli.train(dataloader)
                 loss_li.append(loss)
+                print(f"client {cli} train finish, loss is {loss}")
             # aggregate the global model
             glb_model = copy.deepcopy(clients[0].model)
             for cli in clients[1:]:
@@ -215,7 +225,7 @@ def train_fed_mnist():
                     glb_param.data +=loc_param.data
             for glb_param in glb_model.parameters():
                 glb_param.data /= n_client
-                
+            # print(f"global model updated")
             
             loss = sum(loss_li) / len(loss_li)
             if e % ckpt_save_freq == 0 or e == glb_epoch:
@@ -239,6 +249,7 @@ def train_fed_mnist():
     # sample data from glb_model
     with torch.no_grad():
         gassusian_diffusion = clients[0].gassusian_diffusion
+        torch.manual_seed(sample_seed)
         generated_images =gassusian_diffusion.sample(glb_model,28,batch_size=n_sample,channels=1,timesteps=n_T)
         imgs = generated_images[-1].reshape(n_sample, 28, 28)
         print(imgs.shape)
@@ -248,12 +259,15 @@ def train_fed_mnist():
             sample_save_pth = os.path.join(emd_dst_folder_pth,f"{i}.png")
             save_image(grid, sample_save_pth)
             print("sample %d image from glb_model"%(i+1))
+    print(f"python fed_mnist_emd.py --datasize={datasize} --emd_delta={emd_delta} --test=True --ckpt_load_pth={folder_path}/ckpt_e{glb_epoch}.pt --device={device}")
+    print("----------------")
     print(f"echo {datasize} && echo {emd_delta} && python -m pytorch_fid {emd_dst_folder_pth} {emd_src_folder_pth} --device {device}")
     # print(f"python -m pytorch_fid {emd_dst_folder_pth} {emd_src_folder_pth} --device {device}")
     # python -m pytorch_fid extra/fed_emd/2024-05-08-20:58:06/emd/dst extra/fed_emd/2024-05-08-20:58:06/emd/src --device cuda:2
     
 
 def generate_testimg():
+    
     dataset_pth = "data/mnist/"
     tf = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
