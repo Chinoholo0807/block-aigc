@@ -22,22 +22,15 @@ class Task:
     def __init__(self, task_id, arrival_time,d, c,r_local, r_global, n_max):
         self._task_id = task_id
         self._arrival_time = arrival_time
-        self._d = d
-        self._c = c
-        self._c_range = TASK_C_RANGE
-        self._r_global_range = TASK_R_GLOBAL_RANGE
-        self._r_local_range = TASK_R_LOCAL_RANGE
-        self._n_max_range = TASK_N_MAX_RANGE
+        self._d = d # 任务数据分布
+        self._c = c # 计算资源占用
         self._task_type = None
-        self._r_slot = TASK_R_SLOT
         self._n_max = n_max
-        self._total_r = r_global * r_local
+        self._total_r = r_global * r_local # 全局训练轮数 * 本地训练轮数
         self._runtime = self._total_r * TASK_R_SLOT # 任务运行时间,即资源占用时间
-        self._crashed = False
         self._crash_time = -1
-        self._finished = False
         self._state = TaskState.RUNNING
-        self._assigned_nodes = []
+        self._assigned_nodes = [] # 任务分配的节点
 
         # The following info are not currently considered
         self._num_cpu = 1
@@ -74,11 +67,11 @@ class Task:
     
     @property
     def norm_c(self):
-        return self._c / self._c_range[-1]
+        return self._c / max(TASK_C_RANGE)
 
     @property
     def norm_runtime(self):
-        return self._runtime / (max(self._r_global_range)*  max(self._r_local_range)*TASK_R_SLOT)
+        return self._runtime / (max(TASK_R_LOCAL_RANGE) * max(TASK_R_GLOBAL_RANGE) * TASK_R_SLOT)
     
     @property
     def norm_d(self):
@@ -86,15 +79,23 @@ class Task:
     
     @property
     def norm_n_max(self):
-        return self._n_max / self._n_max_range
+        return self._n_max / max(TASK_N_MAX_RANGE)
+    
+    @property
+    def state(self):
+        return self._state
     
     @property
     def finished(self):
-        return self._finished
+        return self._state == TaskState.FINISHED
     
     @property
     def crashed(self):
-        return self._crashed
+        return self._state == TaskState.CRASHED
+    
+    @property
+    def running(self):
+        return self._state == TaskState.RUNNING
 
     @property
     def vector(self):
@@ -120,36 +121,37 @@ class Task:
             emds.append(emd)
             total_ds  += node.total_ds
         avg_emd = sum(emds) / len(emds)
-        return REWARD_TOTAL(total_ds, avg_emd, self._total_r)
+        return REWARD_FOR_TASK(total_ds, avg_emd, self._total_r)
     
     def set_task_type(self, type_id):
         self._task_type = TaskType(type_id)
 
-    # add_node说明当前节点加入到task中
+    # 指派task给node
     def add_node(self, node):
+        # 确保node不在assigned_nodes中
+        assert node not in self._assigned_nodes, \
+            f"Node {node.id} has been assigned to task {self._task_id}"
         self._assigned_nodes.append(node)
 
     def can_finished(self, curr_time):
-        return not self._crashed and curr_time >= self._arrival_time + self._runtime
+        return self.running and curr_time >= self._arrival_time + self._runtime
 
     def set_finished(self):
-        assert not self._crashed, \
+        assert self.running, \
             f"This task {self._task_id} has been crashed"
-        self._finished = True
+        self._state = TaskState.FINISHED
 
-    def crash(self, curr_time):
+    def set_crashed(self, curr_time):
+        assert self.running, \
+            f"This task {self._task_id} has been finished"
         self._crash_time = curr_time
-        self._crashed = True
-        
-    def crash_boardcast(self, curr_time):
-        for node in self._assigned_nodes:
-            node.crash_task(self,curr_time)
+        self._state = TaskState.CRASHED
 
     def progress(self, curr_time=None):
-        if self._finished:
+        if self.finished:
             return 1.
 
-        if self._crashed:
+        if self.crashed:
             return (self._crash_time - self._arrival_time) / self._runtime
 
         assert curr_time, "Current time unknown"
@@ -166,10 +168,6 @@ class TaskGenerator:
         self._total_time = TOTAL_TIME
         self._total_task = 0
         self._task_arrival_time = None
-        self._c_range = TASK_C_RANGE
-        self._r_local_range = TASK_R_LOCAL_RANGE
-        self._r_global_range = TASK_R_GLOBAL_RANGE
-        self._n_max_range = TASK_N_MAX_RANGE
         self.reset()
 
     def reset(self):
@@ -181,15 +179,16 @@ class TaskGenerator:
         self._total_task = len(self._task_arrival_time)
 
     def __next__(self):
+        # generate a task
         task_id = self._task_id_counter
         assert task_id < self._total_task, "number of tasks out of range"
 
         arrival_time = self._task_arrival_time[task_id]
-        required_d = np.random.choice(SINGLE_D_RANGE, size=NUM_D_TYPES)
-        required_c = np.random.choice(self._c_range)
-        required_r_local = np.random.choice(self._r_local_range)
-        required_r_global = np.random.choice(self._r_global_range)
-        required_n_max = np.random.choice(self._n_max_range)
+        required_d = np.random.choice(SINGLE_D_RANGE, size=NUM_D_TYPES) # 任务数据分布
+        required_c = np.random.choice(TASK_C_RANGE) # 计算资源占用
+        required_r_local = np.random.choice(TASK_R_LOCAL_RANGE)
+        required_r_global = np.random.choice(TASK_R_GLOBAL_RANGE)
+        required_n_max = np.random.choice(TASK_N_MAX_RANGE)
         task = Task(task_id, arrival_time,required_d, required_c, required_r_local, required_r_global, required_n_max)
 
         self._task_id_counter += 1

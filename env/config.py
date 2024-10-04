@@ -24,14 +24,15 @@ K = [
      0, # k9
      1.5 # k10
      ]
+# 训练数据收益函数
 def REWARD_D(total_ds, avg_emd):
     f_avg_emd = K[4]* avg_emd + K[5]
     return  K[6] * (f_avg_emd  - K[1]*np.exp(-K[2]*np.power(K[3]*total_ds,K[7]*f_avg_emd)) )
-
+# 训练时间收益函数
 def REWARD_T(t_occ):
     return  1 - np.exp(-K[8]*(t_occ-K[9]))
-
-def REWARD_TOTAL(total_ds, avg_emd, t_occ):
+# 训练总收益函数
+def REWARD_FOR_TASK(total_ds, avg_emd, t_occ):
     reward_d =  REWARD_D(total_ds, avg_emd) 
     reward_t = REWARD_T(t_occ)
     # print(f"total_ds:{total_ds}, avg_emd:{avg_emd}, t_occ:{t_occ}, reward_d:{reward_d}, reward_t:{reward_t}, reward_total:{reward_d*reward_t}")

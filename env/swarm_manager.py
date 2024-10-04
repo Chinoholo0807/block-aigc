@@ -20,10 +20,8 @@ class SwarmManager:
         self.next_user_task()
 
     def check_finished(self, curr_time):
-        num_finished = 0
         for node in self._nodes:
-            num_finished += node.check_finished(curr_time)
-        return num_finished
+            node.check_finished(curr_time)
 
     def next_user_task(self):
         self._querying_user = np.random.choice(self._users)
@@ -34,41 +32,20 @@ class SwarmManager:
         curr_time = task.arrival_time
         self.check_finished(curr_time)
         return curr_time, terminate
-
-    # 将task分配给node
-    @DeprecationWarning
-    def assign(self, sid, curr_time):
-        assert self._querying_user, \
-            "No querying user found, call next_user_task first"
-        
-        if type(sid) is np.ndarray:
-            assert len(sid) == 1
-            sid = int(sid.item())
-
-        node = self._nodes[sid]
-        assert node.id == sid, \
-            f"Node (id={node.id}) not match assigned sid={sid}"
-        assert self._querying_user.task.arrival_time == curr_time, \
-            f"Arrival time mismatch: {self._querying_user.task.arrival_time} != {curr_time}"
-
-        reward = node.assign_task(self._querying_user.task, curr_time)
-        return reward
     
     # 将task分配给nodes
     def assign_multi(self, sids, curr_time):
         assert self._querying_user, \
             "No querying user found, call next_user_task first"
 
-        # assert len(sids) ==1,\
-        #     "Only one node can be assigned currently"
         task  = self._querying_user.task
         crashed_nodes = []
         for sid in sids:
             node = self._nodes[sid]
-            if node.assign_task_precheck(task) == False :
+            if not node.is_enough(task):
                 crashed_nodes.append(node)
         # 分配此次task后存在node会crash
-        if(len(crashed_nodes) != 0):
+        if 0 < len(crashed_nodes):
             total_penalty = 0.0
             for node in crashed_nodes:
                 penalty = node.assign_task(task, curr_time)
@@ -149,7 +126,7 @@ class SwarmManager:
         best_sid_ = 0
         for service_provider in self._nodes:
             if service_provider.is_enough(self._querying_user.task):
-                reward_ = service_provider.calculate_reward(self._querying_user.task)
+                reward_ = 0.
                 if reward_ > best_reward_:
                     best_reward_ = reward_
                     best_sid_ = service_provider.id
@@ -184,7 +161,7 @@ class SwarmManager:
                   f"{str(info['total_c']).center(10)}"
                   f"{str(info['used_c']).center(9)}"
                   f"{str(info['available_c']).center(14)}"
-                  f"\033[0;31m{str(info['num_crashed']).center(14)}\033[0m")
+                  f"\033[0;31m{str(info['num_node_crashed']).center(14)}\033[0m")
 
         print("-" * WIDTH)
 
@@ -198,7 +175,7 @@ class SwarmManager:
         finished_total_c = 0
         finished_total_reward = 0
         for node in self._nodes:
-            info = node.task_summary()
+            info = node.task_summary_unique()
             total_serving += info['serving']
             total_crashed += info['crashed']
             total_finished += info['finished']

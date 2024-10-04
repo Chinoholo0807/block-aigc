@@ -10,7 +10,7 @@ class AIGCEnv(gym.Env):
     def __init__(self):
         self._swarm_manager = SwarmManager()
         self._observation_space = Box(shape=self.state.shape, low=0, high=1,dtype=np.float32)
-        # self._action_space = Discrete(NUM_NODES)
+        # 动作空间为选择每个node的概率 (NUM_NODES,)
         self._action_space = Box(shape=(NUM_NODES,), low=0,high=1,dtype=np.float32)
 
         self._num_steps = 0
