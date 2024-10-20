@@ -34,7 +34,7 @@ class SwarmManager:
         return curr_time, terminate
     
     # 将task分配给nodes
-    def assign_multi(self, sids, curr_time):
+    def assign(self, sids, curr_time):
         assert self._querying_user, \
             "No querying user found, call next_user_task first"
 
@@ -88,35 +88,21 @@ class SwarmManager:
         return sum([node.used_c for node in self._nodes])
 
     @property
-    def most_available_node(self):
-        arr = [node.available_c  for node in self._nodes]
-        # ret = np.argsort(arr)[::-1]
-        
-        arr = []
-        for node in self._nodes:
-            if node.available_c == 0:
-                arr.append(1)
-            else:
-                arr.append(node.norm_total_ds)
-        ret = np.argsort(arr)
-        # print("ret " , ret)
-        return ret
-
-    @property
     def available_node(self):
-        arr = [node.available_c for node in self._nodes]
-        arr = []
-        num_crashvoid = 0
-        num_crashvoid_threshhold = int(NUM_NODES*0.4)
+        matrix = []
+        viewed = 0
+        limit = int(NUM_NODES*GREEDY_THRESHOLD)
         for node in self._nodes:
-            if node.available_c == 0 and num_crashvoid < num_crashvoid_threshhold:
-                arr.append(1)
-                num_crashvoid = num_crashvoid +1
+            if viewed < limit:
+                if node.is_enough(self._querying_user.task):
+                    matrix.append(node.norm_available_c)
+                else:
+                    matrix.append(0)
+                viewed += 1
             else:
-                arr.append(np.random.rand())
-        ret = np.argsort(arr)
-        # print("ret " , ret)
-        return ret
+                matrix.append(np.random.rand())
+        priority = np.argsort(matrix)[::-1]
+        return priority
     
     
     @property
@@ -168,7 +154,8 @@ class SwarmManager:
         # task info
         total_tasks = 0
         total_serving = 0
-        total_crashed = 0
+        total_task_crashed = 0
+        total_node_crashed = 0
         total_finished = 0
         crashed_total_c = 0
         crashed_total_reward = 0
@@ -177,20 +164,21 @@ class SwarmManager:
         for node in self._nodes:
             info = node.task_summary_unique()
             total_serving += info['serving']
-            total_crashed += info['crashed']
+            total_task_crashed += info['crashed']
+            total_node_crashed += info['num_node_crashed']
             total_finished += info['finished']
             total_tasks += info['total']
             crashed_total_c += info['crashed_total_c']
             finished_total_c += info['finished_total_c']
             crashed_total_reward += info['crashed_total_reward']
             finished_total_reward += info['finished_total_reward']
-        assert total_tasks == total_serving + total_crashed + total_finished
+        assert total_tasks == total_serving + total_task_crashed + total_finished
 
         print(f"\033[7mTask\033[0m".center(6), end='')
         print(f"Total: {total_tasks}".center(14), end='')
         print(f"Serving: {total_serving}".center(13), end='')
-        print(f"\033[0;31mCrashed: {total_crashed} "
-              f"(TotalC: {crashed_total_c}, Reward: {int(crashed_total_reward)})\033[0m"
+        print(f"\033[0;31mCrashed: {total_task_crashed} "
+              f"(TotalC: {crashed_total_c}, Reward: {int(crashed_total_reward)}, NodeCrashed: {total_node_crashed})\033[0m"
               .center(43), end='')
         print(f"\033[0;32mFinished: {total_finished} "
               f"(TotalC: {finished_total_c}, Reward: {int(finished_total_reward)})\033[0m"

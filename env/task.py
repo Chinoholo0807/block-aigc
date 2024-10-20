@@ -16,6 +16,10 @@ class TaskState(Enum):
     RUNNING = auto()
     CRASHED = auto()
     FINISHED = auto()
+    
+class CrashReason(Enum):
+    ASSIGN = auto()
+    PASSIVE = auto()
 
 class Task:
 
@@ -30,6 +34,7 @@ class Task:
         self._runtime = self._total_r * TASK_R_SLOT # 任务运行时间,即资源占用时间
         self._crash_time = -1
         self._state = TaskState.RUNNING
+        self._crash_result = None
         self._assigned_nodes = [] # 任务分配的节点
 
         # The following info are not currently considered

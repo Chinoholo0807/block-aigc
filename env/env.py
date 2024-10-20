@@ -48,7 +48,7 @@ class AIGCEnv(gym.Env):
         top = np.argsort(action)[-n_max:]
         # top = [action]
         # print("top = ", top)
-        reward = self._swarm_manager.assign_multi(top, self._global_clock)
+        reward = self._swarm_manager.assign(top, self._global_clock)
         self._global_clock, self._terminated = self._swarm_manager.next_user_task()
         self._num_steps += 1
         info = {'num_steps': self._num_steps, 'curr_time': self._global_clock}

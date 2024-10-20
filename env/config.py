@@ -6,9 +6,9 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 
 # 训练节点相关
-NUM_NODES = 20  # number of nodes
-TOTAL_C_RANGE = np.arange(2,10)  # 节点总计算资源范围 这里为节点的CPU数量
-SINGLE_D_RANGE = np.arange(50, 500, step=100)  # 单类数据的持有范围
+NUM_NODES = 40  # number of nodes
+TOTAL_C_RANGE = np.arange(20,40+1)  # 节点总计算资源范围 这里为节点的CPU数量
+SINGLE_D_RANGE = np.arange(1, 200)  # 单类数据的持有范围
 NUM_D_TYPES = 10 # 总共有多少类数据
 
 K = [ 
@@ -22,7 +22,7 @@ K = [
      0.986706, # k7
      0.01, # k8
      0, # k9
-     1.5 # k10
+     1 # k10
      ]
 # 训练数据收益函数
 def REWARD_D(total_ds, avg_emd):
@@ -45,11 +45,11 @@ LOCATION_RANGE = [(0, 0), (100, 100)]  # [(x_min, y_min), (x_max, y_max)]
 # 训练任务相关
 LAMBDA = 0.001  # λ for Poisson distribution
 TOTAL_TIME = 1000000  # time duration of an episode
-TASK_C_RANGE = np.arange(1, 2)  # 任务占用的计算资源范围 这里直接取1
+TASK_C_RANGE = np.arange(1, 4+1)  # 任务占用的d计算资源范围 
 TASK_R_LOCAL_RANGE = np.arange(10, 20, step=5)
 TASK_R_GLOBAL_RANGE = np.arange(150, 250, step=20)
 TASK_R_SLOT = 10  # 单轮本地训练花费时间 这里先取固定值
-TASK_N_MAX_RANGE = np.arange(2,4) # 参与任务最多节点数
+TASK_N_MAX_RANGE = np.arange(5,10+1) # 参与任务的节点数量
 
 # For task
 NUM_TASK_TYPES = 5  # number of task types available
@@ -63,3 +63,6 @@ CRASH_PENALTY_COEF = 2.  # The penalty unit value for crash
 CRASH_PENALTY_BASE = 2. 
 # Runtime for each image. The value is proportional to t_T in the diffusion algorithm.
 RUNTIME = lambda t: (0.001 * t ** 2 + 2.5 * t - 14) * 60
+
+# for greedy algorithm
+GREEDY_THRESHOLD = 1

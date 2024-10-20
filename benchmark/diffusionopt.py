@@ -1,18 +1,22 @@
 import argparse
+import sys
 import os
 import pprint
 import torch
+import torch.nn as nn
 import numpy as np
+from os import path
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 from tianshou.data import Collector, VectorReplayBuffer, PrioritizedVectorReplayBuffer
 from tianshou.utils import TensorboardLogger
 from tianshou.trainer import offpolicy_trainer
 
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from env import make_env
-from policy import DiffusionSAC
-from diffusion import Diffusion
-from diffusion.model import MLP, DoubleCritic
+from policy import DiffusionOPT
+from diffusion_continuous import Diffusion
+from diffusion_continuous.model import MLP, DoubleCritic
 
 
 def get_args():
@@ -22,8 +26,9 @@ def get_args():
     parser.add_argument('--task', type=str, default='AaaS')
     parser.add_argument('--algorithm', type=str, default='diffusion_sac')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--buffer-size', type=int, default=1000000)
-    parser.add_argument('-e', '--epoch', type=int, default=1000)
+    parser.add_argument("--exploration-noise", type=float, default=0.1)
+    parser.add_argument('--buffer-size', type=int, default=1e6)
+    parser.add_argument('-e', '--epoch', type=int, default=1e6)
     parser.add_argument('--step-per-epoch', type=int, default=100)
     parser.add_argument('--step-per-collect', type=int, default=1000)
     parser.add_argument('--episode-per-collect', type=int, default=1)
@@ -47,7 +52,7 @@ def get_args():
 
     # for diffusion discrete sac
     parser.add_argument('--actor-lr', type=float, default=1e-4)
-    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--critic-lr', type=float, default=1e-4)
     parser.add_argument('--alpha', type=float, default=0.05)  # for action entropy
     parser.add_argument('--tau', type=float, default=0.005)  # for soft update
     parser.add_argument('-t', '--n-timesteps', type=int, default=5)  # for diffusion chain
@@ -59,7 +64,7 @@ def get_args():
     parser.add_argument('--prioritized-replay', action='store_true', default=False)
     parser.add_argument('--prior-alpha', type=float, default=0.6)
     parser.add_argument('--prior-beta', type=float, default=0.4)
-
+    parser.add_argument('--bc-coef', default=False)
     args = parser.parse_known_args()[0]
     return args
 
@@ -89,18 +94,19 @@ def main(args=get_args()):
     # create actor
     actor_net = MLP(
         state_dim=args.state_shape,
-        action_dim=args.action_shape,
-        hidden_dim=args.hidden_sizes
+        action_dim=args.action_shape
     )
+    # actor is a diffusion model
     actor = Diffusion(
         state_dim=args.state_shape,
         action_dim=args.action_shape,
         model=actor_net,
         max_action=args.max_action,
         beta_schedule=args.beta_schedule,
-        n_timesteps=args.n_timesteps
+        n_timesteps=args.n_timesteps,
+        bc_coef = args.bc_coef
     ).to(args.device)
-    actor_optim = torch.optim.Adam(
+    actor_optim = torch.optim.AdamW(
         actor.parameters(),
         lr=args.actor_lr,
         weight_decay=args.wd
@@ -109,10 +115,9 @@ def main(args=get_args()):
     # create critic
     critic = DoubleCritic(
         state_dim=args.state_shape,
-        action_dim=args.action_shape,
-        hidden_dim=args.hidden_sizes
+        action_dim=args.action_shape
     ).to(args.device)
-    critic_optim = torch.optim.Adam(
+    critic_optim = torch.optim.AdamW(
         critic.parameters(),
         lr=args.critic_lr,
         weight_decay=args.wd
@@ -121,7 +126,7 @@ def main(args=get_args()):
     # log
     time_now = datetime.now().strftime('%b%d-%H%M%S')
     log_path = os.path.join(
-        args.logdir, args.log_prefix, args.task, args.algorithm, time_now)
+        args.logdir, args.log_prefix, args.task, "diffusionopt", time_now)
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
     # visualize model graphs
@@ -130,23 +135,24 @@ def main(args=get_args()):
     # writer.add_graph(critic, dummy_input)
     logger = TensorboardLogger(writer)
 
-    # policy
-    policy = DiffusionSAC(
+    # define policy
+    policy = DiffusionOPT(
+        args.state_shape,
         actor,
         actor_optim,
         args.action_shape,
         critic,
         critic_optim,
-        torch.distributions.Categorical,
+        # dist,
         args.device,
-        alpha=args.alpha,
         tau=args.tau,
         gamma=args.gamma,
         estimation_step=args.n_step,
         lr_decay=args.lr_decay,
         lr_maxt=args.epoch,
-        pg_coef=args.pg_coef,
-        action_space=env.action_space
+        bc_coef=args.bc_coef,
+        action_space=env.action_space,
+        exploration_noise = args.exploration_noise,
     )
 
     # load a previous policy

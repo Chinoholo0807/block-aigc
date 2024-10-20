@@ -116,7 +116,12 @@ class DiffusionSAC(BasePolicy):
         model_ = self._actor if model == "actor" else self._target_actor
         logits, hidden = model_(obs_), None
         dist = self._dist_fn(logits)
-        acts = dist.sample() if self.training else logits.argmax(axis=-1)
+        # print('logits.shape=', logits.shape,',logits=',logits)
+        # print('dist=', type(dist))
+        # acts = dist.sample() if self.training else logits.argmax(axis=-1)
+        acts = logits
+        # print('sample.shape=',dist.sample().shape)
+        # print('logits.argmax.shape=',logits.argmax(axis=-1))
         return Batch(logits=logits, act=acts, state=hidden, dist=dist)
 
     def _to_one_hot(
@@ -144,8 +149,9 @@ class DiffusionSAC(BasePolicy):
 
     def _update_bc(self, batch: Batch, update: bool = False) -> torch.Tensor:
         obs_ = to_torch(batch.obs, device=self._device, dtype=torch.float32)
-        acts_ = self._to_one_hot(batch.act, self._action_dim)
-        acts_ = to_torch(acts_, device=self._device, dtype=torch.float32)
+        # acts_ = self._to_one_hot(batch.act, self._action_dim)
+        # acts_ = to_torch(acts_, device=self._device, dtype=torch.float32)
+        acts_ = batch.act
         bc_loss = self._actor.loss(acts_, obs_).mean()
         if update:
             self._actor_optim.zero_grad()

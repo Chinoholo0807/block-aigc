@@ -50,17 +50,14 @@ class GreedyPolicy(BasePolicy):
         # print("obs.shape", batch.obs.shape, batch.obs.shape[0] )
         greedy = self.greedy_act_func()
         # print(type(greedy))
-        if  isinstance(greedy,np.ndarray):
+        if isinstance(greedy,np.ndarray):
             greedy = torch.from_numpy(greedy.copy())
-        # print("greedy:", greedy)
         base = torch.linspace(1,0,NUM_NODES)
         mean = torch.zeros_like(base)
         mean[greedy] = base
         mean = mean.reshape(1,NUM_NODES)
         std =  torch.ones((1,NUM_NODES))
         logits, hidden = (mean,std), None
-        # print("mean:", mean)
-        
         # convert to probability distribution
         if isinstance(logits, tuple):
             dist = self.dist_fn(*logits)
@@ -72,8 +69,6 @@ class GreedyPolicy(BasePolicy):
             act = logits.argmax(-1)
         elif self.action_type == "continuous":
             act = logits[0]
-        # print("act:",act)
-        # assert act.equal(act_), f"Action mismatch: {act_} != {act}"
         return Batch(logits=logits, act=act, state=hidden, dist=dist)
 
     def learn(

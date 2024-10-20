@@ -136,6 +136,7 @@ class Node:
             "serving": num_serving,
             "crashed": num_crashed,
             "finished": num_finished,
+            "num_node_crashed": self._num_node_crashed,
             "crashed_total_c": crashed_total_c,
             "crashed_total_reward": crashed_total_reward,
             "finished_total_c": finished_total_c,

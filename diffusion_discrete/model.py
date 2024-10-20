@@ -12,6 +12,7 @@ class MLP(nn.Module):
         t_dim=16,
         activation='mish'
     ):
+        t_dim = t_dim[0] if isinstance(t_dim, tuple) else t_dim
         super(MLP, self).__init__()
         _act = nn.Mish if activation == 'mish' else nn.ReLU
         self.time_mlp = nn.Sequential(
@@ -20,6 +21,9 @@ class MLP(nn.Module):
             _act(),
             nn.Linear(t_dim * 2, t_dim)
         )
+        # print('state_dim = ', state_dim)
+        # print('action_dim = ', action_dim)
+        # print('t_dim = ', t_dim)
         self.mid_layer = nn.Sequential(
             nn.Linear(state_dim + action_dim + t_dim, hidden_dim),
             _act(),
@@ -47,7 +51,6 @@ class DoubleCritic(nn.Module):
     ):
         super(DoubleCritic, self).__init__()
         _act = nn.Mish if activation == 'mish' else nn.ReLU
-
         self.q1_net = nn.Sequential(
             nn.Linear(state_dim, hidden_dim),
             _act(),
