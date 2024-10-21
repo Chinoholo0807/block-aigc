@@ -26,8 +26,8 @@ def get_args():
     parser.add_argument('--task', type=str, default='AaaS')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
-    parser.add_argument('--buffer-size', type=int, default=1000000)
-    parser.add_argument('--epoch', type=int, default=1000)
+    parser.add_argument('--buffer-size', type=int, default=1e6)
+    parser.add_argument('--epoch', type=int, default=1e6)
     parser.add_argument('--step-per-epoch', type=int, default=100)
     parser.add_argument('--step-per-collect', type=int, default=1000)
     parser.add_argument('--repeat-per-collect', type=int, default=1)
@@ -50,7 +50,7 @@ def get_args():
 
     # for sac
     parser.add_argument('--actor-lr', type=float, default=1e-4)
-    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--critic-lr', type=float, default=1e-4)
     parser.add_argument('--alpha-lr', type=float, default=3e-4)
     parser.add_argument('--tau', type=float, default=0.005)
     parser.add_argument('--alpha', type=float, default=0.05)
@@ -158,22 +158,6 @@ def main(args=get_args()):
 
     # trainer
     if not args.watch:
-        # result = offpolicy_trainer(
-        #     policy,
-        #     train_collector,
-        #     test_collector,
-        #     args.epoch,
-        #     args.step_per_epoch,
-        #     args.step_per_collect,
-        #     args.test_num,
-        #     args.batch_size,
-        #     stop_fn=stop_fn,
-        #     save_best_fn=save_best_fn,
-        #     logger=logger,
-        #     update_per_step=args.update_per_step,
-        #     test_in_train=False
-        # )
-        # pprint.pprint(result)
         result = OffpolicyTrainer(
             policy=policy,
             train_collector=train_collector,

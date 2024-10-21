@@ -40,16 +40,19 @@ class DiffusionOPT(BasePolicy):
         # Initialize actor network and optimizer if provided
         if actor is not None and actor_optim is not None:
             self._actor: torch.nn.Module = actor  # Actor network
+            self._actor_optim: torch.optim.Optimizer = actor_optim  # Optimizer for the actor network
+            
             self._target_actor = deepcopy(actor)  # Target actor network for stable learning
             self._target_actor.eval()  # Set target actor to evaluation mode
-            self._actor_optim: torch.optim.Optimizer = actor_optim  # Optimizer for the actor network
+            
             self._action_dim = action_dim  # Dimensionality of the action space
 
         # Initialize critic network and optimizer if provided
         if critic is not None and critic_optim is not None:
             self._critic: torch.nn.Module = critic  # Critic network
-            self._target_critic = deepcopy(critic)  # Target critic network for stable learning
             self._critic_optim: torch.optim.Optimizer = critic_optim  # Optimizer for the critic network
+            
+            self._target_critic = deepcopy(critic)  # Target critic network for stable learning
             self._target_critic.eval()  # Set target critic to evaluation mode
 
         # If learning rate decay is applied, initialize learning rate schedulers for both actor and critic

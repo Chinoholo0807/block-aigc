@@ -46,7 +46,7 @@ class RandomPolicy(BasePolicy):
         """Compute action at random."""
         # print("obs.shape", batch.obs.shape, batch.obs.shape[0] )
         output_shape = (batch.obs.shape[0], NUM_NODES)
-        logits, hidden =(torch.rand(output_shape), torch.rand(output_shape)), None
+        logits, hidden =(torch.rand(output_shape)*0.9998 + 0.0001, torch.rand(output_shape)*0.9998 + 0.0001), None
         # convert to probability distribution
         if isinstance(logits, tuple):
             dist = self.dist_fn(*logits)

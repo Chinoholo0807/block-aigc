@@ -21,7 +21,7 @@ def get_args():
     parser.add_argument('--task', type=str, default='AaaS')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
-    parser.add_argument('--epoch', type=int, default=1000)
+    parser.add_argument('--epoch', type=int, default=2000)
     parser.add_argument('--step-per-epoch', type=int, default=100)
     parser.add_argument('--episode-per-collect', type=int, default=1)
     parser.add_argument('--repeat-per-collect', type=int, default=1)

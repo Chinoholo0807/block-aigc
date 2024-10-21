@@ -95,7 +95,7 @@ class SwarmManager:
         for node in self._nodes:
             if viewed < limit:
                 if node.is_enough(self._querying_user.task):
-                    matrix.append(node.norm_available_c)
+                    matrix.append(np.random.rand())
                 else:
                     matrix.append(0)
                 viewed += 1

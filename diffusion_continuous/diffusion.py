@@ -87,7 +87,7 @@ class Diffusion(nn.Module):
         if self.bc_coef:
             return noise
         else:
-            # 通过 x_t和t 得到 x_0
+            # x_t + t -> x_0
             return (
                     extract(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t -
                     extract(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape) * noise
@@ -95,9 +95,9 @@ class Diffusion(nn.Module):
 
 
     # Define the mean, variance, and log variance of the posterior distribution
-    def q_posterior(self, x_start, x_t, t):
+    def q_posterior(self, x_0, x_t, t):
         posterior_mean = (
-                extract(self.posterior_mean_coef1, t, x_t.shape) * x_start +
+                extract(self.posterior_mean_coef1, t, x_t.shape) * x_0 +
                 extract(self.posterior_mean_coef2, t, x_t.shape) * x_t
         )
         posterior_variance = extract(self.posterior_variance, t, x_t.shape)
@@ -105,29 +105,29 @@ class Diffusion(nn.Module):
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
     # Define the mean and variance of the prior distribution
-    def p_mean_variance(self, x, t, s):
-        x_recon = self.predict_start_from_noise(x, t=t, noise=self.model(x, t, s))
+    def p_mean_variance(self, x_t, t, s):
+        x_recon = self.predict_start_from_noise(x_t, t=t, noise=self.model(x_t, t, s))
 
         if self.clip_denoised:
             x_recon.clamp_(-self.max_action, self.max_action)
         else:
             assert RuntimeError()
 
-        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_recon, x_t=x, t=t)
+        model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_0=x_recon, x_t=x_t, t=t)
         return model_mean, posterior_variance, posterior_log_variance
 
     # @torch.no_grad()
     # Sample from the prior distribution
-    def p_sample(self, x, t, s):
-        b, *_, device = *x.shape, x.device
-        model_mean, _, model_log_variance = self.p_mean_variance(x=x, t=t, s=s)
+    def p_sample(self, x_t, t, s):
+        b, *_, device = *x_t.shape, x_t.device
+        model_mean, _, model_log_variance = self.p_mean_variance(x_t=x_t, t=t, s=s)
 
         # with torch.random.fork_rng():
         #     torch.manual_seed(t)
         #     noise = torch.randn_like(x)
-        noise = torch.randn_like(x)
+        noise = torch.randn_like(x_t)
         # no noise when t == 0
-        nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
+        nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x_t.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
     # @torch.no_grad()
@@ -138,14 +138,14 @@ class Diffusion(nn.Module):
         # with torch.random.fork_rng():
         #     torch.manual_seed(0)
         #     x = torch.randn(shape, device=device)
-        x = torch.randn(shape, device=device)
+        x_t = torch.randn(shape, device=device)
 
-        if return_diffusion: diffusion = [x]
+        if return_diffusion: diffusion = [x_t]
 
         progress = Progress(self.n_timesteps) if verbose else Silent()
         for i in reversed(range(0, self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
-            x = self.p_sample(x, timesteps, state)
+            x_t = self.p_sample(x_t, timesteps, state)
             # max_action = 1.0
             # ====== for inference ======
             # x.clamp_(-self.max_action, self.max_action)
@@ -160,17 +160,18 @@ class Diffusion(nn.Module):
 
             progress.update({'t': i})
 
-            if return_diffusion: diffusion.append(x)
+            if return_diffusion: diffusion.append(x_t)
 
         progress.close()
 
         if return_diffusion:
-            return x, torch.stack(diffusion, dim=1)
+            return x_t, torch.stack(diffusion, dim=1)
         else:
-            return x
+            return x_t
 
     # @torch.no_grad()
     # Generate a sample by using the p_sample_loop method and clamp the values within the max action range
+    # 给定state,sample出对应的action,并对action进行clip
     def sample(self, state, *args, **kwargs):
         batch_size = state.shape[0]
         shape = (batch_size, self.action_dim)
@@ -181,24 +182,24 @@ class Diffusion(nn.Module):
 
     # ------------------------------------------ training ------------------------------------------#
     # Define the sampling method for the posterior distribution
-    def q_sample(self, x_start, t, noise=None):
+    def q_sample(self, x_0, t, noise=None):
         # if noise is not provided, generate random noise
         if noise is None:
-            noise = torch.randn_like(x_start)
+            noise = torch.randn_like(x_0)
         # compute the diffused state
         sample = (
-                extract(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start +
-                extract(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) * noise
+                extract(self.sqrt_alphas_cumprod, t, x_0.shape) * x_0 +
+                extract(self.sqrt_one_minus_alphas_cumprod, t, x_0.shape) * noise
         )
 
         return sample
 
     # Compute the losses based on the predictions from the model
-    def p_losses(self, x_start, state, t, weights=1.0):
-        noise = torch.randn_like(x_start)
+    def p_losses(self, x_0, state, t, weights=1.0):
+        noise = torch.randn_like(x_0)
 
         # compute the noisy state
-        x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
+        x_noisy = self.q_sample(x_0=x_0, t=t, noise=noise)
 
         # predict the noise or the original state based on the noisy state
         x_recon = self.model(x_noisy, t, state)
@@ -206,7 +207,7 @@ class Diffusion(nn.Module):
         assert noise.shape == x_recon.shape
 
         if self.bc_coef:
-            loss = self.loss_fn(x_recon, x_start, weights)
+            loss = self.loss_fn(x_recon, x_0, weights)
             # else compute loss based on the predicted original state and the actual original state
         else:
             loss = self.loss_fn(x_recon, noise, weights)
@@ -214,11 +215,11 @@ class Diffusion(nn.Module):
         return loss
 
     # Compute the total loss by sampling different timesteps for each data in the batch
-    def loss(self, x, state, weights=1.0):
-        batch_size = len(x)
+    def loss(self, x_0, state, weights=1.0):
+        batch_size = len(x_0)
         # sample a different timestep for each data in the batch
-        t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()
-        return self.p_losses(x, state, t, weights)
+        t = torch.randint(0, self.n_timesteps, (batch_size,), device=x_0.device).long()
+        return self.p_losses(x_0, state, t, weights)
 
     # Generate a sample from the model
     def forward(self, state, *args, **kwargs):

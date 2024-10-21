@@ -56,7 +56,7 @@ class GreedyPolicy(BasePolicy):
         mean = torch.zeros_like(base)
         mean[greedy] = base
         mean = mean.reshape(1,NUM_NODES)
-        std =  torch.ones((1,NUM_NODES))
+        std = torch.ones((1,NUM_NODES))
         logits, hidden = (mean,std), None
         # convert to probability distribution
         if isinstance(logits, tuple):

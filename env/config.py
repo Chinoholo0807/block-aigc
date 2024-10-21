@@ -7,8 +7,8 @@ torch.manual_seed(SEED)
 
 # 训练节点相关
 NUM_NODES = 40  # number of nodes
-TOTAL_C_RANGE = np.arange(20,40+1)  # 节点总计算资源范围 这里为节点的CPU数量
-SINGLE_D_RANGE = np.arange(1, 200)  # 单类数据的持有范围
+TOTAL_C_RANGE = np.arange(10, 40+1, step=10)  # 节点总计算资源范围 这里为节点的CPU数量
+SINGLE_D_RANGE = np.arange(10, 200+1, step=10)  # 单类数据的持有范围
 NUM_D_TYPES = 10 # 总共有多少类数据
 
 K = [ 
@@ -22,7 +22,7 @@ K = [
      0.986706, # k7
      0.01, # k8
      0, # k9
-     1 # k10
+     1.5 # k10
      ]
 # 训练数据收益函数
 def REWARD_D(total_ds, avg_emd):
@@ -45,7 +45,7 @@ LOCATION_RANGE = [(0, 0), (100, 100)]  # [(x_min, y_min), (x_max, y_max)]
 # 训练任务相关
 LAMBDA = 0.001  # λ for Poisson distribution
 TOTAL_TIME = 1000000  # time duration of an episode
-TASK_C_RANGE = np.arange(1, 4+1)  # 任务占用的d计算资源范围 
+TASK_C_RANGE = np.arange(1, 5+1)  # 任务占用的d计算资源范围 
 TASK_R_LOCAL_RANGE = np.arange(10, 20, step=5)
 TASK_R_GLOBAL_RANGE = np.arange(150, 250, step=20)
 TASK_R_SLOT = 10  # 单轮本地训练花费时间 这里先取固定值
@@ -65,4 +65,4 @@ CRASH_PENALTY_BASE = 2.
 RUNTIME = lambda t: (0.001 * t ** 2 + 2.5 * t - 14) * 60
 
 # for greedy algorithm
-GREEDY_THRESHOLD = 1
+GREEDY_THRESHOLD = 0.9
