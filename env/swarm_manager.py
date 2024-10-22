@@ -32,13 +32,13 @@ class SwarmManager:
         curr_time = task.arrival_time
         self.check_finished(curr_time)
         return curr_time, terminate
-    
+
     # 将task分配给nodes
     def assign(self, sids, curr_time):
         assert self._querying_user, \
             "No querying user found, call next_user_task first"
 
-        task  = self._querying_user.task
+        task = self._querying_user.task
         crashed_nodes = []
         for sid in sids:
             node = self._nodes[sid]
@@ -49,14 +49,14 @@ class SwarmManager:
             total_penalty = 0.0
             for node in crashed_nodes:
                 penalty = node.assign_task(task, curr_time)
-                assert penalty <= 0.0,\
+                assert penalty <= 0.0, \
                     f"Penalty should less than 0.0, current is {penalty}"
                 total_penalty += penalty
             return total_penalty
         # 否则分配正常 计算对应的reward
         for sid in sids:
             node = self._nodes[sid]
-            node.assign_task(task,curr_time) 
+            node.assign_task(task, curr_time)
         return task.reward
 
     @property
@@ -103,8 +103,7 @@ class SwarmManager:
                 matrix.append(np.random.rand())
         priority = np.argsort(matrix)[::-1]
         return priority
-    
-    
+
     @property
     @DeprecationWarning
     def best_reward_service_provider(self):

@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument("--exploration-noise", type=float, default=0.1)
     parser.add_argument('--buffer-size', type=int, default=1e6)
-    parser.add_argument('-e', '--epoch', type=int, default=1e6)
+    parser.add_argument('-e', '--epoch', type=int, default=2000)
     parser.add_argument('--step-per-epoch', type=int, default=100)
     parser.add_argument('--step-per-collect', type=int, default=1000)
     parser.add_argument('--episode-per-collect', type=int, default=1)

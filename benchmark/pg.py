@@ -8,11 +8,13 @@ import numpy as np
 from os import path
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
+from torch.distributions import Independent, Normal
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.utils import TensorboardLogger
 from tianshou.utils.net.common import Net
+from tianshou.utils.net.continuous import ActorProb
 from tianshou.policy import PGPolicy
-from tianshou.trainer import onpolicy_trainer
+from tianshou.trainer import onpolicy_trainer, OnpolicyTrainer
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from env import make_env
@@ -26,7 +28,7 @@ def get_args():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--buffer-size', type=int, default=20000)
-    parser.add_argument('--epoch', type=int, default=1000)
+    parser.add_argument('--epoch', type=int, default=20000)
     parser.add_argument('--step-per-epoch', type=int, default=100)
     parser.add_argument('--episode-per-collect', type=int, default=1)
     parser.add_argument('--step-per-collect', type=int, default=1)
@@ -34,18 +36,19 @@ def get_args():
     parser.add_argument('--update-per-step', type=float, default=1)
     parser.add_argument('--batch-size', type=int, default=99999)
     parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[256, 256])
-    parser.add_argument('--wd', type=float, default=1e-4)
-    parser.add_argument('--gamma', type=float, default=0.95)
+    parser.add_argument('--wd', type=float, default=1e-4) # weight decay
+    parser.add_argument('--gamma', type=float, default=0.95) # discount factor
     parser.add_argument('--training-num', type=int, default=1)
     parser.add_argument('--test-num', type=int, default=1)
     parser.add_argument('--logdir', type=str, default='log')
     parser.add_argument('--log-prefix', type=str, default='default')
     parser.add_argument('--render', type=float, default=0.01)
-    parser.add_argument('--rew-norm', type=int, default=0)
+    parser.add_argument('--rew-norm', type=int, default=0) # reward normalization
     parser.add_argument(
         '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--resume-path', type=str, default=None)
     parser.add_argument('--watch', action="store_true", default=False)
+    parser.add_argument("--lr-decay", type=int, default=True)
 
     # for policy gradient
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -91,33 +94,47 @@ def main(args=get_args()):
         softmax=True,
         device=args.device
     ).to(args.device)
+    actor = ActorProb(
+        net,
+        args.action_shape,
+        unbounded=True,
+        device=args.device,
+    ).to(args.device)
+    torch.nn.init.constant_(actor.sigma_param, -0.5)
+    for m in actor.modules():
+        if isinstance(m, torch.nn.Linear):
+            # orthogonal initialization
+            torch.nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
+            torch.nn.init.zeros_(m.bias)
+    for m in actor.mu.modules():
+        if isinstance(m, torch.nn.Linear):
+            torch.nn.init.zeros_(m.bias)
+            m.weight.data.copy_(0.01 * m.weight.data)
+            
     optim = torch.optim.Adam(
         net.parameters(),
         lr=args.lr,
         weight_decay=args.wd
     )
-
-    # orthogonal initialization
-    for m in net.modules():
-        if isinstance(m, torch.nn.Linear):
-            # orthogonal initialization
-            torch.nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
-            torch.nn.init.zeros_(m.bias)
-
+    
+    def dist(*logits):
+        return Independent(Normal(*logits), 1)
     # policy
     policy = PGPolicy(
-        net,
+        actor,
         optim,
-        torch.distributions.Categorical,
-        args.gamma,
+        dist,
+        discount_factor=args.gamma,
         reward_normalization=args.rew_norm,
+        action_scaling=True,
+        # action_bound_method=None,
+        # lr_scheduler=None,
         action_space=env.action_space,
-        deterministic_eval=True
     )
 
     # load a previous policy
     if args.resume_path:
-        ckpt = torch.load(args.resume_path, map_location=args.device)
+        ckpt = torch.load(args.resume_path, map_location=args.device) 
         policy.load_state_dict(ckpt)
         print("Loaded agent from: ", args.resume_path)
 
@@ -138,8 +155,8 @@ def main(args=get_args()):
             args.repeat_per_collect,
             args.test_num,
             args.batch_size,
-            # episode_per_collect=args.episode_per_collect,
             step_per_collect=args.step_per_collect,
+            update_per_step=args.update_per_step,
             stop_fn=stop_fn,
             save_best_fn=save_best_fn,
             logger=logger

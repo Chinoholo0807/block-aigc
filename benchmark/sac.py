@@ -27,7 +27,7 @@ def get_args():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--buffer-size', type=int, default=1e6)
-    parser.add_argument('--epoch', type=int, default=1e6)
+    parser.add_argument('--epoch', type=int, default=2000)
     parser.add_argument('--step-per-epoch', type=int, default=100)
     parser.add_argument('--step-per-collect', type=int, default=1000)
     parser.add_argument('--repeat-per-collect', type=int, default=1)
@@ -69,11 +69,11 @@ def main(args=get_args()):
     print("Action range:", np.min(env.action_space.low), np.max(env.action_space.high))
     print("device: ", args.device)
     # seed
-    if args.task == 'AaaS':
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        train_envs.seed(args.seed)
-        test_envs.seed(args.seed)
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    train_envs.seed(args.seed)
+    test_envs.seed(args.seed)
 
     # log
     time_now = datetime.now().strftime('%b%d-%H%M%S')

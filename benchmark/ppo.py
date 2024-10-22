@@ -8,11 +8,12 @@ import numpy as np
 from os import path
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
+from torch.distributions import Independent, Normal
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.utils import TensorboardLogger
 from tianshou.policy import PPOPolicy
 from tianshou.utils.net.common import ActorCritic, Net
-from tianshou.utils.net.discrete import Actor, Critic
+from tianshou.utils.net.continuous import ActorProb, Critic
 from tianshou.trainer import onpolicy_trainer
 
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
@@ -71,8 +72,8 @@ def main(args=get_args()):
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    # train_envs.seed(args.seed)
-    # test_envs.seed(args.seed)
+    train_envs.seed(args.seed)
+    test_envs.seed(args.seed)
 
     # log
     time_now = datetime.now().strftime('%b%d-%H%M%S')
@@ -92,32 +93,54 @@ def main(args=get_args()):
         return False
 
     # model
-    net = Net(
+    net_a = Net(
         args.state_shape,
         hidden_sizes=args.hidden_sizes,
         activation=nn.Mish,
         device=args.device
     )
-    actor = Actor(net, args.action_shape, device=args.device).to(args.device)
-    critic = Critic(net, device=args.device).to(args.device)
+    actor = ActorProb(
+        net_a,
+        args.action_shape,
+        unbounded=True,
+        device=args.device,
+    ).to(args.device)
+    net_c = Net(
+        args.state_shape,
+        hidden_sizes=args.hidden_sizes,
+        activation=nn.Mish,
+        device=args.device,
+    )
+    critic = Critic(net_c, device=args.device).to(args.device)
     actor_critic = ActorCritic(actor, critic)
+    
+
+    torch.nn.init.constant_(actor.sigma_param, -0.5)
+    for m in actor_critic.modules():
+        if isinstance(m, torch.nn.Linear):
+            # orthogonal initialization
+            torch.nn.init.orthogonal_(m.weight, gain=np.sqrt(2))
+            torch.nn.init.zeros_(m.bias)
+    for m in actor.mu.modules():
+        if isinstance(m, torch.nn.Linear):
+            torch.nn.init.zeros_(m.bias)
+            m.weight.data.copy_(0.01 * m.weight.data)
+    
     optim = torch.optim.Adam(
         actor_critic.parameters(),
         lr=args.lr,
-        weight_decay=args.wd
+        # weight_decay=args.wd
     )
-    # orthogonal initialization
-    for m in actor_critic.modules():
-        if isinstance(m, torch.nn.Linear):
-            torch.nn.init.orthogonal_(m.weight)
-            torch.nn.init.zeros_(m.bias)
-
+    
+    def dist(*logits):
+        return Independent(Normal(*logits), 1)
+        
     # policy
     policy = PPOPolicy(
         actor,
         critic,
         optim,
-        torch.distributions.Categorical,
+        dist,
         discount_factor=args.gamma,
         max_grad_norm=args.max_grad_norm,
         eps_clip=args.eps_clip,
