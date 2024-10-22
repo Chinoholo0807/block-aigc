@@ -1,4 +1,4 @@
-from .task import TaskType,TaskState
+from .task import TaskType, TaskState
 from .config import *
 
 
@@ -8,11 +8,13 @@ class Node:
         self._sid = sid
         self._task_type = TaskType(task_type_id)
         self._serving_tasks = []
-        self._terminated_tasks = {TaskState.CRASHED: [], TaskState.FINISHED: []}
-        self._num_node_crashed = 0 # 当前node crash的次数
+        self._terminated_tasks = {
+            TaskState.CRASHED: [], TaskState.FINISHED: []}
+        self._num_node_crashed = 0  # 当前node crash的次数
         # 节点资源
-        self._total_c = np.random.choice(TOTAL_C_RANGE) # 持有计算资源
-        self._total_d = np.random.choice(SINGLE_D_RANGE, size=NUM_D_TYPES) # 持有数据资源
+        self._total_c = np.random.choice(TOTAL_C_RANGE)  # 持有计算资源
+        self._total_d = np.random.choice(
+            SINGLE_D_RANGE, size=NUM_D_TYPES)  # 持有数据资源
 
     @property
     def id(self):
@@ -24,27 +26,27 @@ class Node:
 
     @property
     def used_c(self):
-        total_used_c  = 0
+        total_used_c = 0
         for task in self._serving_tasks:
             if task.running:
                 total_used_c += task.c
-        assert total_used_c <= self._total_c,\
+        assert total_used_c <= self._total_c, \
             f"Node {id}'s used c {total_used_c} >= total c {self._total_c}"
         return total_used_c
 
     @property
     def total_d(self):
         return self._total_d
-    
+
     @property
     def norm_total_d(self):
         # 归一化后即为数据资源的分布
         return self.total_d / self.total_ds
-    
+
     @property
     def total_ds(self):
         return sum(self._total_d)
-        
+
     @property
     def norm_total_ds(self):
         return self.total_ds / (max(SINGLE_D_RANGE) * NUM_D_TYPES)
@@ -52,7 +54,7 @@ class Node:
     @property
     def available_c(self):
         return self.total_c - self.used_c
-    
+
     @property
     def norm_available_c(self):
         return self.available_c / self._total_c
@@ -60,7 +62,7 @@ class Node:
     @property
     def norm_total_c(self):
         return self._total_c / max(TOTAL_C_RANGE)
-    
+
     @property
     def vector(self):
         return np.hstack([self.norm_total_d, self.norm_total_c, self.norm_total_ds, self.norm_available_c])
@@ -77,7 +79,7 @@ class Node:
                 self._serving_tasks.remove(task)
             if task not in self._terminated_tasks[TaskState.FINISHED]:
                 self._terminated_tasks[TaskState.FINISHED].append(task)
-        
+
     def is_enough(self, task):
         return task.c <= self.available_c
 
@@ -108,10 +110,10 @@ class Node:
             "finished_total_c": finished_total_c,
             "finished_total_reward": finished_total_reward
         }
-        
+
     def task_summary_unique(self):
         num_serving = sum(
-            1 if task.assigned_nodes[0] == self else 0 for task in self._serving_tasks 
+            1 if task.assigned_nodes[0] == self else 0 for task in self._serving_tasks
         )
         num_crashed = sum(
             1 if task.assigned_nodes[0] == self else 0 for task in self._terminated_tasks[TaskState.CRASHED]
@@ -148,11 +150,11 @@ class Node:
             if running_task_.can_finished(curr_time):
                 # running -> finished
                 running_task_.set_finished()
-               
+
             for node in running_task_.assigned_nodes:
                 node.update_task_list(running_task_)
-    
-    # 将task分配给node 
+
+    # 将task分配给node
     def assign_task(self, task, curr_time):
         reward = 0.
         # 资源不足, node直接crash
@@ -162,15 +164,16 @@ class Node:
             for running_task_ in self._serving_tasks:
                 if running_task_.running:
                     running_task_.set_crashed(curr_time)
-                    
+
                 for node in running_task_.assigned_nodes:
                     node.update_task_list(running_task_)
                 if running_task_.crashed:
-                    penalty += (1 - running_task_.progress()) * CRASH_PENALTY_COEF
+                    penalty += (1 - running_task_.progress()) * \
+                        CRASH_PENALTY_COEF
             self._serving_tasks.clear()
             self._num_node_crashed += 1
             return -penalty
-        
+
         # task记录在node中 node记录在task中
         self._serving_tasks.append(task)
         task.add_node(self)
@@ -181,7 +184,6 @@ class Node:
         self._terminated_tasks[TaskState.CRASHED].clear()
         self._terminated_tasks[TaskState.FINISHED].clear()
         self._num_node_crashed = 0
-
 
     @property
     def info(self):

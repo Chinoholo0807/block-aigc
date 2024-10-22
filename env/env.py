@@ -9,9 +9,11 @@ class AIGCEnv(gym.Env):
 
     def __init__(self):
         self._swarm_manager = SwarmManager()
-        self._observation_space = Box(shape=self.state.shape, low=0, high=1,dtype=np.float32)
+        self._observation_space = Box(
+            shape=self.state.shape, low=0, high=1, dtype=np.float32)
         # 动作空间为选择每个node的概率 (NUM_NODES,)
-        self._action_space = Box(shape=(NUM_NODES,), low=0,high=1,dtype=np.float32)
+        self._action_space = Box(
+            shape=(NUM_NODES,), low=0, high=1, dtype=np.float32)
 
         self._num_steps = 0
         self._terminated = False
@@ -70,18 +72,21 @@ def make_env(task, training_num=0, test_num=0):
         return AIGCEnv() if task_name == 'AaaS' else gym.make(task_name)
 
     env = _select_env(task)
-    if task == 'AaaS': env.seed(SEED)
+    if task == 'AaaS':
+        env.seed(SEED)
 
     train_envs, test_envs = None, None
     if training_num:
         train_envs = DummyVectorEnv(
             [lambda: _select_env(task) for _ in range(training_num)])
-        if task == 'AaaS': train_envs.seed(SEED)
+        if task == 'AaaS':
+            train_envs.seed(SEED)
 
     if test_num:
 
         test_envs = DummyVectorEnv(
             [lambda: _select_env(task) for _ in range(test_num)])
-        if task == 'AaaS': test_envs.seed(SEED)
+        if task == 'AaaS':
+            test_envs.seed(SEED)
 
     return env, train_envs, test_envs
