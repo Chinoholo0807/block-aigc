@@ -166,4 +166,5 @@ log/
 matrix/
 extra/
 nohup/
+temp/
 .history/
