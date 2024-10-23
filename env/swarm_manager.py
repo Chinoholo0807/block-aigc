@@ -44,19 +44,12 @@ class SwarmManager:
             node = self._nodes[sid]
             if not node.is_enough(task):
                 crashed_nodes.append(node)
+        for sid in sids:
+            self._nodes[sid].assign_task(task)
         # 分配此次task后存在node会crash
         if 0 < len(crashed_nodes):
-            total_penalty = 0.0
-            for node in crashed_nodes:
-                penalty = node.assign_task(task, curr_time)
-                assert penalty <= 0.0, \
-                    f"Penalty should less than 0.0, current is {penalty}"
-                total_penalty += penalty
-            return total_penalty
-        # 否则分配正常 计算对应的reward
-        for sid in sids:
-            node = self._nodes[sid]
-            node.assign_task(task, curr_time)
+            total_penalty = crashed_nodes[0].check_crashed(curr_time)
+            return -total_penalty
         return task.reward
 
     @property
@@ -177,10 +170,10 @@ class SwarmManager:
         print(f"Total: {total_tasks}".center(14), end='')
         print(f"Serving: {total_serving}".center(13), end='')
         print(f"\033[0;31mCrashed: {total_task_crashed} "
-              f"(TotalC: {crashed_total_c}, Reward: {int(crashed_total_reward)}, NodeCrashed: {total_node_crashed})\033[0m"
+              f"(TotalC: {crashed_total_c}, Reward: {crashed_total_reward}, NodeCrashed: {total_node_crashed})\033[0m"
               .center(43), end='')
         print(f"\033[0;32mFinished: {total_finished} "
-              f"(TotalC: {finished_total_c}, Reward: {int(finished_total_reward)})\033[0m"
+              f"(TotalC: {finished_total_c}, Reward: {finished_total_reward})\033[0m"
               .center(45))
         print("-" * WIDTH)
 

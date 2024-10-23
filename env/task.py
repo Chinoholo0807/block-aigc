@@ -118,10 +118,6 @@ class Task:
     def reward(self):
         assert len(self._assigned_nodes) > 0, \
             "No assigned nodes for the task"
-        if self.crashed:
-            penalty = CRASH_PENALTY_BASE
-            penalty += (1 - self.progress()) * CRASH_PENALTY_COEF
-            return penalty
         emds = []
         total_ds = 0
         for node in self._assigned_nodes:

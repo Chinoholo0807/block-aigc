@@ -30,8 +30,8 @@ class Node:
         for task in self._serving_tasks:
             if task.running:
                 total_used_c += task.c
-        assert total_used_c <= self._total_c, \
-            f"Node {id}'s used c {total_used_c} >= total c {self._total_c}"
+        # assert total_used_c <= self._total_c, \
+        #     f"Node {id}'s used c {total_used_c} >= total c {self._total_c}"
         return total_used_c
 
     @property
@@ -83,34 +83,6 @@ class Node:
     def is_enough(self, task):
         return task.c <= self.available_c
 
-    def task_summary(self):
-        num_serving = len(self._serving_tasks)
-        num_crashed = len(self._terminated_tasks[TaskState.CRASHED])
-        num_finished = len(self._terminated_tasks[TaskState.FINISHED])
-        crashed_total_c = sum(
-            task.c for task in self._terminated_tasks[TaskState.CRASHED]
-        )
-        finished_total_c = sum(
-            task.c for task in self._terminated_tasks[TaskState.FINISHED]
-        )
-        # 计算reward时 选取第一个node作为task的leader node计算reward
-        crashed_total_reward = sum(
-            task.reward for task in self._terminated_tasks[TaskState.CRASHED]
-        )
-        finished_total_reward = sum(
-            task.reward for task in self._terminated_tasks[TaskState.FINISHED]
-        )
-        return {
-            "total": num_serving + num_crashed + num_finished,
-            "serving": num_serving,
-            "crashed": num_crashed,
-            "finished": num_finished,
-            "crashed_total_c": crashed_total_c,
-            "crashed_total_reward": crashed_total_reward,
-            "finished_total_c": finished_total_c,
-            "finished_total_reward": finished_total_reward
-        }
-
     def task_summary_unique(self):
         num_serving = sum(
             1 if task.assigned_nodes[0] == self else 0 for task in self._serving_tasks
@@ -155,29 +127,27 @@ class Node:
                 node.update_task_list(running_task_)
 
     # 将task分配给node
-    def assign_task(self, task, curr_time):
-        reward = 0.
-        # 资源不足, node直接crash
-        if not self.is_enough(task):
-            penalty = CRASH_PENALTY_COEF
-            # 该node上其他task也crash
-            for running_task_ in self._serving_tasks:
-                if running_task_.running:
-                    running_task_.set_crashed(curr_time)
-
-                for node in running_task_.assigned_nodes:
-                    node.update_task_list(running_task_)
-                if running_task_.crashed:
-                    penalty += (1 - running_task_.progress()) * \
-                        CRASH_PENALTY_COEF
-            self._serving_tasks.clear()
-            self._num_node_crashed += 1
-            return -penalty
-
+    def assign_task(self, task):
         # task记录在node中 node记录在task中
+        assert task not in self._serving_tasks, \
+            f"Task {task.id} has been assigned to node {self.id}"
         self._serving_tasks.append(task)
         task.add_node(self)
-        return reward
+    
+    def check_crashed(self, curr_time):
+        penalty = 0.
+        if self.available_c < 0:
+            for running_task_ in self._serving_tasks[:]:
+                assert running_task_.running, "Task should be running"
+                # running -> crashed
+                running_task_.set_crashed(curr_time)
+                for node in running_task_.assigned_nodes:
+                    node.update_task_list(running_task_)
+                assert running_task_.crashed, "Task should be crashed"
+                penalty += (1 - running_task_.progress()) * CRASH_PENALTY_COEF
+            self._serving_tasks.clear()
+            self._num_node_crashed += 1
+        return penalty
 
     def reset(self):
         self._serving_tasks.clear()
