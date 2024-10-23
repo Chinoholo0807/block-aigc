@@ -39,17 +39,22 @@ class SwarmManager:
             "No querying user found, call next_user_task first"
 
         task = self._querying_user.task
+        # precheck
         crashed_nodes = []
         for sid in sids:
             node = self._nodes[sid]
             if not node.is_enough(task):
                 crashed_nodes.append(node)
+        # try to assign
         for sid in sids:
-            self._nodes[sid].assign_task(task)
-        # 分配此次task后存在node会crash
+            node = self._nodes[sid]
+            node.assign_task(task, curr_time)
+
         if 0 < len(crashed_nodes):
-            total_penalty = crashed_nodes[0].check_crashed(curr_time)
-            return -total_penalty
+            penalty = 0.
+            for node in crashed_nodes:
+                penalty += node.check_is_crashed(curr_time)
+                return -penalty
         return task.reward
 
     @property

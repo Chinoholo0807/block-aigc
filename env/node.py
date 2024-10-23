@@ -125,29 +125,27 @@ class Node:
 
             for node in running_task_.assigned_nodes:
                 node.update_task_list(running_task_)
-
+    
     # 将task分配给node
-    def assign_task(self, task):
-        # task记录在node中 node记录在task中
-        assert task not in self._serving_tasks, \
-            f"Task {task.id} has been assigned to node {self.id}"
+    def assign_task(self, task, curr_time):
         self._serving_tasks.append(task)
         task.add_node(self)
-    
-    def check_crashed(self, curr_time):
+
+    def check_is_crashed(self, curr_time):
         penalty = 0.
         if self.available_c < 0:
-            for running_task_ in self._serving_tasks[:]:
-                assert running_task_.running, "Task should be running"
-                # running -> crashed
+            penalty = 0.
+            for running_task_ in self._serving_tasks:
+                assert running_task_.running, \
+                    f"Task {running_task_.id} is not running"
                 running_task_.set_crashed(curr_time)
                 for node in running_task_.assigned_nodes:
                     node.update_task_list(running_task_)
-                assert running_task_.crashed, "Task should be crashed"
                 penalty += (1 - running_task_.progress()) * CRASH_PENALTY_COEF
             self._serving_tasks.clear()
             self._num_node_crashed += 1
         return penalty
+
 
     def reset(self):
         self._serving_tasks.clear()
